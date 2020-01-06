@@ -12,5 +12,6 @@ def get_dict(instance_name = "n20w20.001.txt"):
                 d[key] = {'x':int(float(r[1])), 'y':int(float(r[2])), 'ti':int(float(r[4])), 'tf':int(float(r[5])), 'demand':int(float(r[3])), 't_service':int(float(r[-1][:-2]))}
     return d
 
-    
+if __name__ == "__main__":
+    print(get_dict())
 
