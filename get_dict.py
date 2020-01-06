@@ -13,5 +13,3 @@ def get_dict(instance_name = "n20w20.001.txt"):
 
     
 
-d = get_dict()
-print(d)
