@@ -1,5 +1,6 @@
 
 def get_dict(instance_name = "n20w20.001.txt"):
+    """Il faut que les instances soient dans metah/DumasEtAl"""
     with open('DumasEtAl/' + instance_name, "r") as f:
         d = {}
         for _ in range(6):
