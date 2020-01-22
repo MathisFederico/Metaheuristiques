@@ -1,7 +1,7 @@
 from utilities import get_dict, plot_sol, max_dist, dist
 from energy import Potential
-from random import randint
-
+from random import randint, random
+import numpy as np
 def recuit(T, T_min, λ, pot = Potential(), inst_dict = get_dict(), print_results = True, print_log = False):
     def voisin(solution):
         """Renvoie la solution avec deux noeuds aléatories échangés"""
