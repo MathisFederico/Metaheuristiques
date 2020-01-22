@@ -78,10 +78,23 @@ def plot_sol(solution, inst_dict):
     print_circles(ax=ax, t_tot=times[-1], X=inst_dict, radius=1.2)
     ax.scatter(X,Y)
     plt.show()
+def dist(inst_dict, key1, key2):
+    return np.sqrt((inst_dict[key1]['x']-inst_dict[key2]['x'])**2 +(inst_dict[key1]['y']-inst_dict[key2]['y'])**2) 
+        
+def max_dist(inst_dict):
+    max_d= 0
+    for k1 in inst_dict:
+        for k2 in inst_dict:
+            d = dist(inst_dict, k1,k2)
+            if d >= max_d:
+                max_d= d
+    return max_d
+
+
 
 if __name__ == "__main__":
     inst = get_dict()
     
-    sol = ['1' ,'17', '10', '20', '18', '19', '11', '6', '16', '2', '12', '13', '7', '14', '8', '3', '5', '9', '21', '4' ,'15' ]
-    sol = [int(s) for s in sol]
+    sol = [1, 17, 10, 20, 18, 19, 11, 6, 16, 2, 12, 13, 7, 14, 8, 3, 5, 9, 21, 4, 15]
     plot_sol(sol, inst)
+

@@ -16,7 +16,7 @@ class Potential():
             else:
                 return t - tf
 
-        cost, t = 0, 0
+        cost, t, errors = 0, 0, 0
         prev_key = initial_key
         
         # Check that every point is taken once
@@ -45,11 +45,12 @@ class Potential():
             # print('\n', key, (t, ti, tf), (X_dict[key]['x'], X_dict[key]['y']), (X_dict[prev_key]['x'], X_dict[prev_key]['y']))
             if not in_window(t, ti, tf):
                 # print('Not in window !', distance_to_window(t, ti, tf))
+                errors +=1
                 cost += distance_to_window(t, ti, tf)
 
             # Update the previous key
             prev_key = key    
             
-        return cost, t
+        return cost, t, errors
 
 
