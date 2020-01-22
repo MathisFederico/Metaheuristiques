@@ -11,7 +11,7 @@ def isValid(X_dict, solution, initial_key=1):
         print('Every point must be taken once !')
     return every_point_taken
 
-def get_dict(instance_name = "n20w20.001.txt"):
+def get_dict(instance_name = "n20w20.004.txt"):
     """Il faut que les instances soient dans metah/DumasEtAl"""
     with open('DumasEtAl/' + instance_name, "r") as f:
         d = {}
@@ -24,11 +24,23 @@ def get_dict(instance_name = "n20w20.001.txt"):
                 d[key] = {'x':int(float(r[1])), 'y':int(float(r[2])), 'ti':int(float(r[4])), 'tf':int(float(r[5])), 'demand':int(float(r[3])), 't_service':int(float(r[-1][:-2]))}
     return d
 
+def extract_inst(instance_name):
+    X_dict = get_dict(instance_name)
+    try :
+        with open('DumasEtAl/' + instance_name + '.solution', "r") as f:
+            sol = f.readline()
+        sol = sol.split(' ')[:-1]
+        sol = [int(num) for num in sol]
+        return X_dict, sol
+            
+    except FileNotFoundError:
+        return X_dict, None
+
+
 def plot_sol(X_dict, solution):
 
     def print_circles(ax, t_tot, X, radius=0.1):
         for key in X:
-            print(key)
             center = (X[key]['x'], X[key]['y'])
             thetai = (X[key]['ti']/t_tot) * 360
             if X[key]['tf'] < t_tot: thetaf = (X[key]['tf']/t_tot) * 360
@@ -101,8 +113,6 @@ def max_dist(inst_dict):
     return max_d
 
 if __name__ == "__main__":
-    inst = get_dict()
-    
-    sol = [1, 17, 10, 20, 18, 19, 11, 6, 16, 2, 12, 13, 7, 14, 8, 3, 5, 9, 21, 4, 15]
-    plot_sol(sol, inst)
-
+    inst, sol = extract_inst("n20w20.004.txt")
+    if sol is not None:
+        plot_sol(inst, sol)
