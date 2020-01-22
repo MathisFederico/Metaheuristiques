@@ -1,4 +1,4 @@
-from get_dict import get_dict
+from utilities import get_dict, plot_sol
 from energy import Potential
 
 

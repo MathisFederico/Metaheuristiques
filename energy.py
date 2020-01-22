@@ -42,9 +42,9 @@ class Potential():
             
             # Compute cost if not in window
             ti, tf = X_dict[key]['ti'], X_dict[key]['tf']
-            print('\n', key, (t, ti, tf), (X_dict[key]['x'], X_dict[key]['y']), (X_dict[prev_key]['x'], X_dict[prev_key]['y']))
+            # print('\n', key, (t, ti, tf), (X_dict[key]['x'], X_dict[key]['y']), (X_dict[prev_key]['x'], X_dict[prev_key]['y']))
             if not in_window(t, ti, tf):
-                print('Not in window !', distance_to_window(t, ti, tf))
+                # print('Not in window !', distance_to_window(t, ti, tf))
                 cost += distance_to_window(t, ti, tf)
 
             # Update the previous key
