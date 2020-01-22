@@ -6,31 +6,35 @@ import matplotlib.pyplot as plt
 
 def recuit(T = 100., T_min = 10., lamb = 0.99, pot = Potential(), plotting = False, inst_dict = get_dict(), print_results = True, print_log = False):
     λ = lamb
+
     def voisin1(solution):
         """Renvoie la solution avec deux noeuds aléatories échangés"""
-        i = randint(0, len(solution)-1)
-        j = randint(0, len(solution)-1)
+        i = randint(1, len(solution)-1)
+        j = randint(1, len(solution)-1)
         while j==i:
-            j = randint(0, len(solution)-1)
+            j = randint(1, len(solution)-1)
         s_perm = [k for k in solution]
         s_perm[i],s_perm[j] = s_perm[j],s_perm[i]
-        return s_perm 
+        return s_perm
+    
     def voisin(solution):
         """Renvoie la solution avec deux noeuds aléatories échangés"""
-        i = randint(0, len(solution)-2)
+        i = randint(1, len(solution)-2)
         s_perm = [k for k in solution]
         s_perm[i],s_perm[i+1] = s_perm[i+1],s_perm[i]
         return s_perm 
 
     s = list(range(1, len(inst_dict)+1)) #solution initiale 1, 2, ... , n
     penalite = (len(s)+1)/2*max_dist(inst_dict)
+
     def cost1(E, penalite = penalite):
         return 10*E[0] + E[1] + penalite*int(E[0]> 0)
+    
     def cost(E, penalite = penalite):
         return E[2]/len(s)
     
     s_best = s
-    k=0
+    k = 0
     E = pot.evaluate(inst_dict, s, initial_key=1)
     e = cost(E)
     E_best = E
@@ -68,5 +72,5 @@ def recuit(T = 100., T_min = 10., lamb = 0.99, pot = Potential(), plotting = Fal
     return s_best,E_best
 
 if __name__ == "__main__":
-    s,E = recuit( T = 10, T_min = 0.1, lamb = 0.9999, plotting = True, pot = Potential(), inst_dict = get_dict(), print_results = True, print_log = False)
-    #plot_sol(s, get_dict())
+    s,E = recuit(T = 10, T_min = 0.1, lamb = 0.9999, plotting = True, pot = Potential(), inst_dict = get_dict(), print_results = True, print_log = False)
+    plot_sol(s, get_dict())

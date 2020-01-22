@@ -1,10 +1,18 @@
-
+from utilities import isValid
 
 class Potential():
 
     evaluate_count = 0
+    dist_count = 0
+    speed = 1.0
 
-    def evaluate(self, X_dict:dict, solution:list, initial_key:int, speed=1.0):
+    def get_dist(self, X_dict:dict, key1:int, key2:int):
+        self.dist_count += 1
+        distance = ( (X_dict[key1]['x'] - X_dict[key2]['x'])**2 \
+                    + (X_dict[key1]['y'] - X_dict[key2]['y'])**2 )**.5
+        return distance
+
+    def evaluate(self, X_dict:dict, solution:list, initial_key:int):
         self.evaluate_count += 1
 
         def in_window(t, ti, tf):
@@ -20,11 +28,7 @@ class Potential():
         prev_key = initial_key
         
         # Check that every point is taken once
-        every_point_taken = all([key==initial_key or key in solution for key in X_dict])
-        try:
-            assert(every_point_taken)
-        except AssertionError:
-            print('Every point must be taken once !')
+        if not isValid(X_dict, solution, initial_key):
             return (-1, -1)
 
         for key in solution:
@@ -34,10 +38,8 @@ class Potential():
                 continue
 
             # Compute time taken
-            distance = ( (X_dict[key]['x'] - X_dict[prev_key]['x'])**2 \
-                        + (X_dict[key]['y'] - X_dict[prev_key]['y'])**2 )**.5
-            
-            time_taken = distance/speed
+            distance = self.get_dist(X_dict, key, prev_key)
+            time_taken = distance/self.speed
             t += time_taken
             
             # Compute cost if not in window
