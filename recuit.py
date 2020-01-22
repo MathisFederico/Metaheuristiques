@@ -73,4 +73,4 @@ def recuit(T = 100., T_min = 10., lamb = 0.99, pot = Potential(), plotting = Fal
 
 if __name__ == "__main__":
     s,E = recuit(T = 10, T_min = 0.1, lamb = 0.9999, plotting = True, pot = Potential(), inst_dict = get_dict(), print_results = True, print_log = False)
-    plot_sol(s, get_dict())
+    plot_sol(get_dict(), s)
