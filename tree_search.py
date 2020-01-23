@@ -260,7 +260,7 @@ class TSPTW_Env(Env):
         return self.path
 
 if __name__ == "__main__":
-    X_dict = get_dict("n200w40.001.txt")
+    X_dict = get_dict("n20w20.001.txt")
     err = len(X_dict)
     env = TSPTW_Env(X_dict)
     mcts_env = MctsEnv(env)
@@ -272,7 +272,7 @@ if __name__ == "__main__":
             mcts_env.resetEnv(observation)
             action, _ = mcts_env.run_search(n_simulation=n_simulation, temperature=0)
             np.set_printoptions(precision=2, suppress=True)
-            print(action, np.sum(mcts_env.tree.get_node(observation).N), mcts_env.tree.get_node(observation).actions)
+            print(action, np.sum(mcts_env.tree.get_node(observation).N), mcts_env.tree.get_node(observation).N, mcts_env.tree.get_node(observation).actions)
             observation, reward, done, _ = env.step(action)
         print('Final solution : {}'.format(observation))    
         print(TSPTW_Env.potential.dist_count)   
