@@ -19,9 +19,10 @@ class MCTS_DAG():
             self.isFinal = isFinal
         
         def initialiseNode(self, legal_actions, P, value):
-            n_actions = np.size(np.array(legal_actions))
+            legal_actions = np.array(legal_actions)
+            n_actions = np.size(legal_actions)
             self.action_indexes = {str(action):i for i,action in enumerate(legal_actions)}
-            self.indexes_action = {i:str(action) for i,action in enumerate(legal_actions)}
+            self.actions = [str(action) for action in legal_actions]
             self.N = np.zeros((n_actions,))
             self.Q = np.zeros((n_actions,))
             self.P = P
@@ -34,10 +35,10 @@ class MCTS_DAG():
         
         def get_UCB_action(self, c=1):
             if np.sum(self.N) == 0:
-                return self.indexes_action[np.random.choice(np.array(range(self.Q.size)))]
-            UCB = self.Q + c*self.P*np.sqrt(np.log(np.sum(self.N))/(0.01+self.N))
+                return self.actions[np.random.choice(np.array(range(self.Q.size)))]
+            UCB = self.Q + c*self.P*np.sqrt(np.log(np.sum(self.N))/(1+self.N))
             action_idx = np.argmax(UCB)
-            return self.indexes_action[action_idx]
+            return self.actions[action_idx]
     
     def __init__(self):
         self.nodes = {}
@@ -69,11 +70,11 @@ class MCTS_DAG():
 class MctsEnv():
 
     def __init__(self, gym_env, model=None):
-        self.env = gym_env
+        self.env = deepcopy(gym_env)
         self.initial_observation = self.env.reset()
         self.tree = MCTS_DAG()
         self.model = model
-        self.c = 2
+        self.c = 3
         self.reward, self.done = 0, False
 
     def _is_leaf(self, observation):
@@ -171,15 +172,19 @@ class MctsEnv():
     def run_search(self, n_simulation=1600, temperature=1):
         for sim in range(n_simulation):
             if 100*sim/n_simulation % 10 == 0:
-                print("\nSimulation {}/{}".format(sim, n_simulation))
+                # print("\nSimulation {}/{}".format(sim, n_simulation))
+                pass
             history, observation = self._simulate()
             self._backup(history, observation)
 
         policy = self.build_policy(temperature=temperature)
-        action = choice(range(len(policy)), p=policy)
+        actions = self.tree.get_node(self.initial_observation).actions
+        action = choice(actions, p=policy)
+        # print("Choice", self.initial_observation, actions, action)
         return action, policy
     
     def resetEnv(self, observation):
+        print("Initial state : ", observation)
         self.env.initial_state = observation
         self.initial_observation = self.env.reset()
         self.reward, self.done = 0, False
@@ -192,10 +197,10 @@ class TSPTW_Env(Env):
 
     potential = Potential()
 
-    def __init__(self, X_dict=get_dict()):
+    def __init__(self, X_dict):
         self.X_dict = X_dict
         self.initial_state = [1]
-        self.path = [1]
+        self.path = deepcopy(self.initial_state)
         self.time = 0
         self.action_space = spaces.Discrete(len(self.X_dict)-1)
         self.observation_space = spaces.Discrete(len(self.X_dict))
@@ -208,44 +213,56 @@ class TSPTW_Env(Env):
         return legal_actions
 
     def isLegal(self, action:int):
-        return (action not in self.path) and (action in self.X_dict)
+        return (action not in self.path) and (int(action) in self.X_dict)
 
     def step(self, action:int):
+        real_action = int(action)
         try:
-            assert(self.isLegal(action))
+            assert(self.isLegal(real_action))
         except AssertionError:
-            print('\n Non-Legal action : {}\n'.format(action))
+            raise AssertionError('\n Non-Legal action : {}\n'.format(real_action))
 
-        time_to_go = self.potential.get_time(self.X_dict, self.path[-1], action)
-        self.path.append(action)
+        time_to_go = self.potential.get_time(self.X_dict, self.path[-1], real_action)
+        self.path.append(real_action)
         observation = self.path
 
         self.time += time_to_go
         reward = 0
         
         done = len(self.path) == len(self.X_dict)
-        if len(self.path) > 16:
-            print(len(self.path))
-        if done and self.potential.in_window(self.time, self.X_dict[action]['ti'], self.X_dict[action]['tf']):
+        if done and self.potential.evaluate(self.X_dict, self.path)[2] == 0:
             print('Solution found! : {}'.format(self.path))
-            reward = 1000
+            print('N_distances: {}'.format(self.potential.dist_count))
+            return
 
-        if not self.potential.in_window(self.time, self.X_dict[action]['ti'], self.X_dict[action]['tf']):
-            reward = len(self.path) - len(self.X_dict) - 10
-            done = True
+        if not self.potential.in_window(self.time, self.X_dict[real_action]['ti'], self.X_dict[real_action]['tf']):
+            reward = -.01*self.potential.distance_to_window(self.time, self.X_dict[real_action]['ti'], self.X_dict[real_action]['tf'])
+            reward += -10
+
+        # reward /= len(observation)
+        # print(observation, reward)
 
         # print(observation, reward, done)
         return observation, reward, done, {}
 
     def reset(self):
-        self.path = [1]
+        self.path = deepcopy(self.initial_state)
         self.time = 0
         return self.path
 
-
-env = TSPTW_Env()
-mcts_env = MctsEnv(env)
-print(mcts_env.run_search(n_simulation=200000, temperature=0))
-print(mcts_env.tree.get_node([1]).N)
-print(mcts_env.tree.get_node([1]).Q)
-print(TSPTW_Env.potential.dist_count)
+if __name__ == "__main__":
+    X_dict = get_dict("n20w20.001.txt")
+    env = TSPTW_Env(X_dict)
+    observation = env.reset()
+    done = False
+    mcts_env = MctsEnv(env)
+    n_sim = 10000
+    while not done:
+        n_simulation = int(n_sim/np.log(1+len(observation)))
+        mcts_env.resetEnv(observation)
+        action, _ = mcts_env.run_search(n_simulation=n_simulation, temperature=0)
+        # print(action, np.sum(mcts_env.tree.get_node(observation).N), mcts_env.tree.get_node(observation).N, mcts_env.tree.get_node(observation).actions)
+        observation, reward, done, _ = env.step(action)
+    print('Final solution : {}'.format(observation))    
+    print(TSPTW_Env.potential.dist_count)
+    plot_sol(X_dict, observation)

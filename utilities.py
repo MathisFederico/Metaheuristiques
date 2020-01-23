@@ -114,5 +114,7 @@ def max_dist(inst_dict):
 
 if __name__ == "__main__":
     inst, sol = extract_inst("n20w20.004.txt")
+    print(sol)
+    sol = [1, 12, 3, 4, 20, 16, 6, 10, 5, 9, 8, 7, 17, 2, 19, 11, 18, 15, 13, 14, 21]
     if sol is not None:
         plot_sol(inst, sol)

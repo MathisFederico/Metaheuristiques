@@ -27,7 +27,7 @@ class Potential():
         else:
             return t - tf
 
-    def evaluate(self, X_dict:dict, solution:list, initial_key:int):
+    def evaluate(self, X_dict:dict, solution:list, initial_key=1):
         self.evaluate_count += 1
 
         cost, t, errors = 0, 0, 0
