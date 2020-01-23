@@ -20,7 +20,6 @@ class MCTS_DAG():
         
         def initialiseNode(self, legal_actions, P, value):
             legal_actions = np.array(legal_actions)
-            if len(legal_actions) == 0: self.isFinal = True
             n_actions = np.size(legal_actions)
             self.action_indexes = {str(action):i for i,action in enumerate(legal_actions)}
             self.actions = [str(action) for action in legal_actions]
@@ -28,6 +27,9 @@ class MCTS_DAG():
             self.Q = np.zeros((n_actions,))
             self.P = P
             self.value = value
+            if len(legal_actions) == 0: 
+                self.isFinal = True
+                self.value = -1
 
         def update(self, action, value):
             action_idx = self.action_indexes[str(action)]
@@ -144,13 +146,13 @@ class MctsEnv():
         if self.tree.get_node(last_observation).value is not None:
             value = self.tree.get_node(last_observation).value
         else:
-                if self.model is None:
-                    _, value = np.ones(action_space_size), self.reward
-                else:
-                    x = np.array([last_observation])
-                    _, value = self.model.predict(x)
-                    value = value[0,0]
-                    # print("After sim : For leaf : ", x[0], " value is ", value)
+            if self.model is None:
+                _, value = np.ones(action_space_size), self.reward
+            else:
+                x = np.array([last_observation])
+                _, value = self.model.predict(x)
+                value = value[0,0]
+                # print("After sim : For leaf : ", x[0], " value is ", value)
         
         # Update nodes in history
         for observation, action in history:
@@ -181,8 +183,8 @@ class MctsEnv():
 
         policy = self.build_policy(temperature=temperature)
         actions = self.tree.get_node(self.initial_observation).actions
-        if len(actions) == 0: 
-            actions = [action for action in range(len(self.env.X_dict)) if action not in self.initial_observation]
+        if len(actions) == 0:
+            actions = [action for action in range(1, len(self.env.X_dict)+1) if action not in self.initial_observation]
             return choice(actions), policy
         action = choice(actions, p=policy)
         # print("Choice", self.initial_observation, actions, action)
@@ -243,8 +245,8 @@ class TSPTW_Env(Env):
 
         if not self.potential.in_window(self.time, self.X_dict[real_action]['ti'], self.X_dict[real_action]['tf']):
             reward = -.1*self.potential.distance_to_window(self.time, self.X_dict[real_action]['ti'], self.X_dict[real_action]['tf'])
-            reward += -100
-
+            reward += -10
+    
         # reward *= len(observation)
         # print(observation, reward)
 
@@ -257,19 +259,23 @@ class TSPTW_Env(Env):
         return self.path
 
 if __name__ == "__main__":
-    X_dict = get_dict("n20w20.001.txt")
+    X_dict = get_dict("n20w20.004.txt")
+    err = len(X_dict)
     env = TSPTW_Env(X_dict)
-    observation = env.reset()
-    done = False
     mcts_env = MctsEnv(env)
-    while not done:
-        n_simulation = int(30000/len(observation)**.3)
-        mcts_env.resetEnv(observation)
-        action, _ = mcts_env.run_search(n_simulation=n_simulation, temperature=0)
-        np.set_printoptions(precision=2, suppress=True)
-        soft_N_root = np.exp(-mcts_env.tree.get_node(observation).N)/np.sum(np.exp(-mcts_env.tree.get_node(observation).N))
-        print(action, np.sum(mcts_env.tree.get_node(observation).N), soft_N_root, mcts_env.tree.get_node(observation).actions)
-        observation, reward, done, _ = env.step(action)
-    print('Final solution : {}'.format(observation))    
-    print(TSPTW_Env.potential.dist_count)
+    while err > 3:
+        observation = env.reset()
+        done = False
+        while not done:
+            n_simulation = int(10000/len(observation))
+            mcts_env.resetEnv(observation)
+            action, _ = mcts_env.run_search(n_simulation=n_simulation, temperature=0)
+            np.set_printoptions(precision=2, suppress=True)
+            soft_N_root = np.exp(-mcts_env.tree.get_node(observation).N)/np.sum(np.exp(-mcts_env.tree.get_node(observation).N))
+            print(action, np.sum(mcts_env.tree.get_node(observation).N), soft_N_root, mcts_env.tree.get_node(observation).actions)
+            observation, reward, done, _ = env.step(action)
+        print('Final solution : {}'.format(observation))    
+        print(TSPTW_Env.potential.dist_count)   
+        a, b, err = Potential().evaluate(X_dict, observation)
+        print(a, b, err)
     plot_sol(X_dict, observation)
