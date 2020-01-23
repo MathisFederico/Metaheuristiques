@@ -20,6 +20,7 @@ class MCTS_DAG():
         
         def initialiseNode(self, legal_actions, P, value):
             legal_actions = np.array(legal_actions)
+            if len(legal_actions) == 0: self.isFinal = True
             n_actions = np.size(legal_actions)
             self.action_indexes = {str(action):i for i,action in enumerate(legal_actions)}
             self.actions = [str(action) for action in legal_actions]
@@ -74,11 +75,11 @@ class MctsEnv():
         self.initial_observation = self.env.reset()
         self.tree = MCTS_DAG()
         self.model = model
-        self.c = 3
+        self.c = 1
         self.reward, self.done = 0, False
 
     def _is_leaf(self, observation):
-        return self.done or np.sum(self.tree.get_node(observation).N)==0
+        return self.done or np.sum(self.tree.get_node(observation).N)==0 or self.tree.get_node(observation).isFinal
 
     def _simulate(self):
         self.done = False
@@ -106,7 +107,7 @@ class MctsEnv():
                 # print("Added at the while in simulation : ", observation)
                 self.add_node(observation)
 
-        if not self.done:
+        if not (self.done or self.tree.get_node(observation).isFinal):
 
             # Last action selection using upper confidence bound
             action = int(self.tree.get_node(observation).get_UCB_action())
@@ -159,6 +160,7 @@ class MctsEnv():
     def build_policy(self, temperature=1):
         root = self.tree.get_node(self.initial_observation)
         N = np.array(root.N)
+        if np.size(N) == 0: return 1
         if temperature > 0:
             P = np.divide(np.power(N, 1/temperature), np.sum(np.power(N, 1/temperature)))
             if np.any(np.isnan(P)):
@@ -179,6 +181,9 @@ class MctsEnv():
 
         policy = self.build_policy(temperature=temperature)
         actions = self.tree.get_node(self.initial_observation).actions
+        if len(actions) == 0: 
+            actions = [action for action in range(len(self.env.X_dict)) if action not in self.initial_observation]
+            return choice(actions), policy
         action = choice(actions, p=policy)
         # print("Choice", self.initial_observation, actions, action)
         return action, policy
@@ -209,7 +214,8 @@ class TSPTW_Env(Env):
         legal_actions = []
         for action in range(len(self.X_dict)+2):
             if (action not in observation) and (action in self.X_dict):
-                legal_actions.append(action)
+                if self.time + self.potential.get_time(self.X_dict, observation[-1], action) >= self.X_dict[action]['ti']:
+                    legal_actions.append(action)
         return legal_actions
 
     def isLegal(self, action:int):
@@ -236,10 +242,10 @@ class TSPTW_Env(Env):
             return
 
         if not self.potential.in_window(self.time, self.X_dict[real_action]['ti'], self.X_dict[real_action]['tf']):
-            reward = -.01*self.potential.distance_to_window(self.time, self.X_dict[real_action]['ti'], self.X_dict[real_action]['tf'])
-            reward += -10
+            reward = -.1*self.potential.distance_to_window(self.time, self.X_dict[real_action]['ti'], self.X_dict[real_action]['tf'])
+            reward += -100
 
-        # reward /= len(observation)
+        # reward *= len(observation)
         # print(observation, reward)
 
         # print(observation, reward, done)
@@ -256,12 +262,13 @@ if __name__ == "__main__":
     observation = env.reset()
     done = False
     mcts_env = MctsEnv(env)
-    n_sim = 10000
     while not done:
-        n_simulation = int(n_sim/np.log(1+len(observation)))
+        n_simulation = int(30000/len(observation)**.3)
         mcts_env.resetEnv(observation)
         action, _ = mcts_env.run_search(n_simulation=n_simulation, temperature=0)
-        # print(action, np.sum(mcts_env.tree.get_node(observation).N), mcts_env.tree.get_node(observation).N, mcts_env.tree.get_node(observation).actions)
+        np.set_printoptions(precision=2, suppress=True)
+        soft_N_root = np.exp(-mcts_env.tree.get_node(observation).N)/np.sum(np.exp(-mcts_env.tree.get_node(observation).N))
+        print(action, np.sum(mcts_env.tree.get_node(observation).N), soft_N_root, mcts_env.tree.get_node(observation).actions)
         observation, reward, done, _ = env.step(action)
     print('Final solution : {}'.format(observation))    
     print(TSPTW_Env.potential.dist_count)
