@@ -1,4 +1,4 @@
-from utilities import plot_sol, get_dict
+from utilities import plot_sol, get_dict, draw_animated_solution
 from energy import Potential
 from gym import Env, spaces
 import numpy as np
@@ -9,6 +9,7 @@ class MCTS_DAG():
 
     class Node:
         action_indexes = {}
+        UCB = []
         N = []
         Q = []
         P = []
@@ -39,8 +40,8 @@ class MCTS_DAG():
         def get_UCB_action(self, c=1):
             if np.sum(self.N) == 0:
                 return self.actions[np.random.choice(np.array(range(self.Q.size)))]
-            UCB = self.Q + c*self.P*np.sqrt(np.log(np.sum(self.N))/(1+self.N))
-            action_idx = np.argmax(UCB)
+            self.UCB = self.Q + c*self.P*np.sqrt(np.log(np.sum(self.N))/(1+self.N))
+            action_idx = np.argmax(self.UCB)
             return self.actions[action_idx]
     
     def __init__(self):
@@ -77,7 +78,7 @@ class MctsEnv():
         self.initial_observation = self.env.reset()
         self.tree = MCTS_DAG()
         self.model = model
-        self.c = 1.5
+        self.c = 3
         self.reward, self.done = 0, False
 
     def _is_leaf(self, observation):
@@ -191,7 +192,7 @@ class MctsEnv():
         return action, policy
     
     def resetEnv(self, observation):
-        print("Initial state : ", observation)
+        # print("Initial state : ", observation)
         self.env.initial_state = observation
         self.initial_observation = self.env.reset()
         self.reward, self.done = 0, False
@@ -239,13 +240,17 @@ class TSPTW_Env(Env):
         reward = 0
         
         done = len(self.path) == len(self.X_dict)
-        if done and self.potential.evaluate(self.X_dict, self.path)[2] == 0:
-            print('Solution found! : {}'.format(self.path))
-            print('N_distances: {}'.format(self.potential.dist_count))
-            return
+        if done:
+            errors = self.potential.evaluate(self.X_dict, self.path)[2]
+            if errors == 0:
+                print('Solution found! : {}'.format(self.path))
+                print('N_distances: {}'.format(self.potential.dist_count))
+                return
+            else:
+                reward = -errors**2
 
         if not self.potential.in_window(self.time, self.X_dict[real_action]['ti'], self.X_dict[real_action]['tf']):
-            reward = -.1*self.potential.distance_to_window(self.time, self.X_dict[real_action]['ti'], self.X_dict[real_action]['tf'])
+            reward += -.1*self.potential.distance_to_window(self.time, self.X_dict[real_action]['ti'], self.X_dict[real_action]['tf'])
             reward += -10
     
         # reward *= len(observation)
@@ -260,22 +265,26 @@ class TSPTW_Env(Env):
         return self.path
 
 if __name__ == "__main__":
-    X_dict = get_dict("n20w20.001.txt")
-    err = len(X_dict)
+    nodes = 20
+    width = 20
+    instance = '005'
+    X_dict = get_dict("n{}w{}.{}.txt".format(nodes, width, instance))
+    err = nodes
     env = TSPTW_Env(X_dict)
     mcts_env = MctsEnv(env)
-    while err > 3:
+    while err > 0:
         observation = env.reset()
         done = False
         while not done:
-            n_simulation = int(10000/np.log(1+len(observation)))
+            n_simulation = int(1000/np.log(1+len(observation)))
             mcts_env.resetEnv(observation)
             action, _ = mcts_env.run_search(n_simulation=n_simulation, temperature=0)
             np.set_printoptions(precision=2, suppress=True)
-            print(action, np.sum(mcts_env.tree.get_node(observation).N), mcts_env.tree.get_node(observation).N, mcts_env.tree.get_node(observation).actions)
+            print(action, mcts_env.tree.get_node(observation).actions, mcts_env.tree.get_node(observation).UCB,
+                    mcts_env.tree.get_node(observation).N/np.sum(mcts_env.tree.get_node(observation).N), mcts_env.tree.get_node(observation).Q)
             observation, reward, done, _ = env.step(action)
         print('Final solution : {}'.format(observation))    
         print(TSPTW_Env.potential.dist_count)   
         a, b, err = Potential().evaluate(X_dict, observation)
         print(a, b, err)
-    plot_sol(X_dict, observation)
+    draw_animated_solution(X_dict, observation)

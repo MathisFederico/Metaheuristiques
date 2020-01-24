@@ -103,7 +103,7 @@ def plot_sol(X_dict, solution):
     ax.axis('equal')
     plt.show()
 
-def draw_animated_solution(X_dict, solution, initial_key=1, speed=1.0):
+def draw_animated_solution(X_dict, solution, initial_key=1, speed=1.0, save=False):
 
     # Check that solution is valid
     isValid(X_dict, solution, initial_key)
@@ -179,8 +179,8 @@ def draw_animated_solution(X_dict, solution, initial_key=1, speed=1.0):
         return tuple(np.concatenate(pretty_circles)) + (path,)
 
     anim = animation.FuncAnimation(fig, animate, init_func=init, frames=path_X.size+50, interval=30, blit=True)
-    anim.save('solution.gif', codec="libx264", fps=int(1/0.030), bitrate=-1, dpi=-1)
     plt.show()
+    if save: anim.save('solution.gif', codec="libx264", fps=int(1/0.030), bitrate=-1, dpi=-1)
 
 def dist(inst_dict, key1, key2):
     return np.sqrt((inst_dict[key1]['x']-inst_dict[key2]['x'])**2 +(inst_dict[key1]['y']-inst_dict[key2]['y'])**2) 
@@ -195,8 +195,8 @@ def max_dist(inst_dict):
     return max_d
 
 if __name__ == "__main__":
-    inst, sol = extract_inst("n20w20.001.txt")
+    inst, sol = extract_inst("n40w20.001.txt")
     print(sol)
-    sol = [1, 17, 20, 10, 19, 11, 18, 6, 16, 2, 12, 13, 7, 14, 8, 3, 5, 9, 21, 4, 15]
+    # sol = [1, 17, 20, 10, 19, 11, 18, 6, 16, 2, 12, 13, 7, 14, 8, 3, 5, 9, 21, 4, 15]
     if sol is not None:
         draw_animated_solution(inst, sol)
