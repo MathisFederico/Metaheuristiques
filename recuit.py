@@ -1,4 +1,4 @@
-from utilities import get_dict, plot_sol, max_dist, dist, draw_animated_solution
+from utilities import get_dict, plot_sol, max_dist, draw_animated_solution, extract_inst
 from energy import Potential
 from random import randint, random
 import numpy as np
@@ -24,7 +24,7 @@ def recuit(inst_dict, pot, T = 100., T_min = 10., lamb = 0.99, initial_key=1, **
     solution = list(range(1, len(inst_dict)+1)) #solution initiale 1, 2, ... , n
     if greedy_start:
         solution = fifo_greedy(inst_dict)
-    penality = (len(solution)+1)*max_dist(inst_dict)/10
+    penality = (len(solution)+1)*max_dist(inst_dict, pot)/10
     print(penality)
 
     def cost(E, penality=penality):
@@ -69,17 +69,17 @@ def recuit(inst_dict, pot, T = 100., T_min = 10., lamb = 0.99, initial_key=1, **
         k += 1
         solutions_energy.append(energy)
         best_energies.append(energy_best)
-        if print_log : print(f'Iteration {k} :\t errors = {evaluation[2]} \t P={P} \t {energy} \t {new_energy}')
+        if print_log and k%100==0: print(f'Iteration {k} :\t errors = {evaluation[2]} \t P={P} \t {energy} \t {new_energy}')
 
     if print_results:
         print(f'Best = {best_solution} \nEvaluation = {best_evaluation} in {k} iterations')
 
     if plotting :
         plt.plot(solutions_energy, label = 'Solutions energy')
-        plt.plot(best_energies, label = 'Best_energies')
-        plt.plot([best_evaluation[1] for _ in best_energies], linestyle='--', label = 'Travel time', color='g')
-        plt.plot([best_evaluation[1] + best_evaluation[2]*penality for _ in best_energies], linestyle='--', label = 'Penality', color='r')
-        plt.plot([best_evaluation[1] + best_evaluation[2]*penality + best_evaluation[0] for _ in best_energies], linestyle='--', label = 'Out window', color='b')
+        plt.plot(best_energies, label = 'Best_energies', linestyle=':')
+        # plt.plot([best_evaluation[1] for _ in best_energies], linestyle='--', label = 'Travel time', color='g')
+        # plt.plot([best_evaluation[1] + best_evaluation[2]*penality for _ in best_energies], linestyle='--', label = 'Penality', color='r')
+        # plt.plot([best_evaluation[1] + best_evaluation[2]*penality + best_evaluation[0] for _ in best_energies], linestyle='--', label = 'Out window', color='b')
         plt.legend()
         plt.show()
 
@@ -87,7 +87,7 @@ def recuit(inst_dict, pot, T = 100., T_min = 10., lamb = 0.99, initial_key=1, **
 
 if __name__ == "__main__":
     pot = Potential()
-    data = get_dict("n60w20.002.txt")
-    solution, energy = recuit(data, pot, T=100, T_min=1, lamb=0.999, plotting=True, print_log=True, greedy_start=True)
-    draw_animated_solution(data, [solution])
+    data, official_solution = extract_inst("n200w20.001.txt")
+    solution, energy = recuit(data, pot, T=1000, T_min=0.1, lamb=0.999, plotting=True, print_log=True, greedy_start=True)
+    draw_animated_solution(data, [solution, official_solution])
     print("Distances evaluations :", pot.dist_count)
