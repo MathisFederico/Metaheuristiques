@@ -13,6 +13,67 @@ def isValid(X_dict, solution, initial_key=1):
         print('Every point must be taken once !')
     return every_point_taken
 
+
+class Potential():
+
+    evaluate_count = 0
+    dist_count = 0
+    speed = 1.0
+
+    def get_time(self, X_dict:dict, start_key:int, end_key:int, t:float):
+        distance = self.get_dist(X_dict, start_key, end_key)
+        return max(distance/self.speed, X_dict[end_key]['ti'] - t)
+
+    def get_dist(self, X_dict:dict, key1:int, key2:int):
+        self.dist_count += 1
+        distance = ( (X_dict[key1]['x'] - X_dict[key2]['x'])**2 \
+                    + (X_dict[key1]['y'] - X_dict[key2]['y'])**2 )**.5
+        return int(distance)
+
+    @staticmethod
+    def in_window(t, ti, tf):
+        return (t >= ti) and (t <= tf)
+
+    @staticmethod
+    def distance_to_window(t, ti, tf):
+        if t < ti:
+            return ti - t
+        else:
+            return t - tf
+
+    def evaluate(self, X_dict:dict, solution:list, initial_key=1):
+
+        # Check that every point is taken once
+        if not isValid(X_dict, solution, initial_key):
+            return (-1, -1, -1)
+
+        self.evaluate_count += 1
+
+        oow_cost, time, errors = 0, 0, 0
+        prev_key = initial_key
+        
+        for key in solution:
+
+            # Pass the first key if it is the initial key
+            if key == prev_key:
+                continue
+
+            # Compute time taken
+            time_taken = self.get_time(X_dict, prev_key, key, time)
+            time += time_taken
+            
+            # Compute out of window cost if not in window
+            ti, tf = X_dict[key]['ti'], X_dict[key]['tf']
+            if not self.in_window(time, ti, tf):
+                errors +=1
+                oow_cost += self.distance_to_window(time, ti, tf)
+
+            # Update the previous key
+            prev_key = key    
+            
+        return oow_cost, time, errors
+
+
 def get_dict(instance_name = "n20w20.004.txt"):
     """Il faut que les instances soient dans metah/DumasEtAl"""
     with open('DumasEtAl/' + instance_name, "r") as f:
@@ -26,6 +87,7 @@ def get_dict(instance_name = "n20w20.004.txt"):
                 d[key] = {'x':int(float(r[1])), 'y':int(float(r[2])), 'ti':int(float(r[4])), 'tf':int(float(r[5])), 'demand':int(float(r[3])), 't_service':int(float(r[-1][:-2]))}
     return d
 
+
 def extract_inst(instance_name):
     X_dict = get_dict(instance_name)
     try :
@@ -37,6 +99,7 @@ def extract_inst(instance_name):
             
     except FileNotFoundError:
         return X_dict, None
+
 
 def print_circles(ax, t_tot, X, radius=0.1):
     circles = []
@@ -50,12 +113,9 @@ def print_circles(ax, t_tot, X, radius=0.1):
         circles.append(draw_pretty_circle(center, thetai, thetaf, thetat, is_in_window=is_in_window, radius=radius, ax=ax))
     return circles
 
+
 def draw_pretty_circle(center, thetai, thetaf, thetat, is_in_window=False, radius=0.1, ax=None,
                     **kwargs):
-    """
-    Add two half circles to the axes *ax* (or the current axes) with the 
-    specified facecolors *colors* rotated at *angle* (in degrees).
-    """
     if ax is None:
         ax = plt.gca()
 
@@ -76,7 +136,8 @@ def draw_pretty_circle(center, thetai, thetaf, thetat, is_in_window=False, radiu
     ax.add_artist(tick)
     return [time_window, back_circle, blacktick, tick]
 
-def plot_sol(X_dict, solution):
+
+def plot_sol(X_dict, solution, potential=Potential()):
 
     if not isValid(X_dict, solution):
         return
@@ -85,7 +146,7 @@ def plot_sol(X_dict, solution):
     prev_k = 1
     X_dict[prev_k]['t'] = 0
     for k in solution[1:]:
-        time = times[-1] + dist(X_dict, k, prev_k)/1.0
+        time = times[-1] + potential.get_dist(X_dict, prev_k, k)/1.0
         X_dict[k]['t'] = time
         
         times.append(time)
@@ -104,7 +165,8 @@ def plot_sol(X_dict, solution):
     ax.axis('equal')
     plt.show()
 
-def draw_animated_solution(instance_dict:dict, solutions:list, initial_key=1, speed=1.0, save=False):
+
+def draw_animated_solution(instance_dict:dict, solutions:list, potential=Potential(), initial_key=1, speed=1.0, save=False):
     if type(solutions[0]) == int:
         solutions = [solutions]
 
@@ -124,16 +186,18 @@ def draw_animated_solution(instance_dict:dict, solutions:list, initial_key=1, sp
         t = 0
         prev_key = initial_key
         sol_dict[initial_key]['t'] = t
-        sol_dict[initial_key]['dt'] = 0
         path_X, path_Y = [], []
         for key in solution[1:]:
-            distance = dist(sol_dict, key, prev_key)
+            distance = potential.get_dist(instance_dict, prev_key, key)
             time_taken = max(distance/speed, sol_dict[key]['ti'] - t)
+            n_timesteps_path = max(1, int(round(distance/speed)))
+            n_timesteps_wait = int(max(0, sol_dict[key]['ti'] - t - distance/speed))
             t += time_taken
-            sol_dict[key]['dt'] = time_taken
             sol_dict[key]['t'] = t
-            n_timesteps = int(round(time_taken))
-            path_x, path_y = getEquidistantPoints((sol_dict[prev_key]['x'], sol_dict[prev_key]['y']), (sol_dict[key]['x'], sol_dict[key]['y']), n_timesteps)
+            path_x, path_y = getEquidistantPoints((sol_dict[prev_key]['x'], sol_dict[prev_key]['y']), (sol_dict[key]['x'], sol_dict[key]['y']), n_timesteps_path)
+            if n_timesteps_wait > 0:
+                path_x = np.concatenate([path_x, [path_x[-1] for _ in range(n_timesteps_wait)]])
+                path_y = np.concatenate([path_y, [path_y[-1] for _ in range(n_timesteps_wait)]])
             path_X.append(path_x)
             path_Y.append(path_y)
             prev_key = key 
@@ -146,7 +210,7 @@ def draw_animated_solution(instance_dict:dict, solutions:list, initial_key=1, sp
         sol_dicts.append(deepcopy(sol_dict))
         sol_paths.append(deepcopy((path_X, path_Y)))
 
-    def getColor(t, t_arrived, dt, ti, tf):
+    def getColor(t, t_arrived, ti, tf):
         if t <= ti:
             return (0, 0, 1, 0.3)
         elif ti <= t_arrived and t_arrived <= tf and t >= t_arrived:
@@ -187,7 +251,7 @@ def draw_animated_solution(instance_dict:dict, solutions:list, initial_key=1, sp
         for i, sol_dict in enumerate(sol_dicts):
             for k in range(len(sol_dict)):
                 key = k+1
-                color = getColor(t, t_arrived=sol_dict[key]['t'], dt=sol_dict[key]['dt'], ti=sol_dict[key]['ti'], tf=sol_dict[key]['tf'])
+                color = getColor(t, t_arrived=sol_dict[key]['t'], ti=sol_dict[key]['ti'], tf=sol_dict[key]['tf'])
                 time_window, back_circle, _, _ = pretty_circles_list[i][k]
                 back_circle.set_color(color)
                 time_window.set_color(color)
@@ -198,26 +262,26 @@ def draw_animated_solution(instance_dict:dict, solutions:list, initial_key=1, sp
 
         return tuple(np.concatenate([np.concatenate(pretty_circles_list[i]) for i in range(len(solutions))])) + tuple(paths)
 
-    anim = animation.FuncAnimation(fig, animate, init_func=init, frames=path_X.size+50, interval=30, blit=True)
+    nb_frames = np.max([sol_paths[i][0].size+50 for i in range(len(solutions))])
+    anim = animation.FuncAnimation(fig, animate, init_func=init, frames=nb_frames, interval=30, blit=True)
     plt.show()
     if save: anim.save('solution.gif', codec="libx264", fps=int(1/0.030), bitrate=-1, dpi=-1)
 
-def dist(inst_dict, key1, key2):
-    return np.sqrt((inst_dict[key1]['x']-inst_dict[key2]['x'])**2 +(inst_dict[key1]['y']-inst_dict[key2]['y'])**2) 
-        
-def max_dist(inst_dict):
+
+def max_dist(inst_dict, potential=Potential()):
     max_d= 0
     for k1 in inst_dict:
         for k2 in inst_dict:
-            d = dist(inst_dict, k1,k2)
+            d = potential.get_dist(inst_dict, k1, k2)
             if d >= max_d:
                 max_d= d
     return max_d
 
+
 if __name__ == "__main__":
     inst, official_sol = extract_inst("n20w20.001.txt")
     print("Official:", official_sol)
-    sol = [1, 17, 20, 10, 19, 11, 18, 6, 16, 2, 12, 13, 7, 14, 8, 3, 5, 9, 21, 4, 15]
+    sol = [1, 17, 15, 20, 11, 19, 6, 18, 16, 2, 12, 13, 7, 14, 8, 3, 5, 9, 21, 4, 10]
     print("Local:",sol)
     if official_sol is not None:
         draw_animated_solution(inst, [sol, official_sol], save=False)
