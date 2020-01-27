@@ -3,6 +3,7 @@ import matplotlib
 import numpy as np
 from matplotlib.patches import Wedge
 from matplotlib import animation, transforms
+from copy import deepcopy
 
 def isValid(X_dict, solution, initial_key=1):
     every_point_taken = all([key==initial_key or key in solution for key in X_dict])
@@ -103,35 +104,47 @@ def plot_sol(X_dict, solution):
     ax.axis('equal')
     plt.show()
 
-def draw_animated_solution(X_dict, solution, initial_key=1, speed=1.0, save=False):
+def draw_animated_solution(instance_dict:dict, solutions:list, initial_key=1, speed=1.0, save=False):
+    if type(solutions[0]) == int:
+        solutions = [solutions]
 
-    # Check that solution is valid
-    isValid(X_dict, solution, initial_key)
+    # Check that every solution is valid
+    for solution in solutions:
+        isValid(instance_dict, solution, initial_key)
 
     def getEquidistantPoints(p1, p2, parts):
         return (np.linspace(p1[0], p2[0], parts), np.linspace(p1[1], p2[1], parts))
 
     # First compute the t_tot and t for each point
-    t = 0
-    prev_key = initial_key
-    X_dict[initial_key]['t'] = t
-    X_dict[initial_key]['dt'] = 0
-    path_X, path_Y = [], []
-    for key in solution[1:]:
-        distance = dist(X_dict, key, prev_key)
-        time_taken = distance/speed
-        t += time_taken
-        X_dict[key]['dt'] = time_taken
-        X_dict[key]['t'] = t
-        n_timesteps = int(round(time_taken))
-        path_x, path_y = getEquidistantPoints((X_dict[prev_key]['x'], X_dict[prev_key]['y']), (X_dict[key]['x'], X_dict[key]['y']), n_timesteps)
-        path_X.append(path_x)
-        path_Y.append(path_y)
-        prev_key = key 
-    t_tot = t
+    sol_dicts = []
+    sol_paths = []
+    sol_tots = []
+    for solution in solutions:
+        sol_dict = deepcopy(instance_dict)
+        t = 0
+        prev_key = initial_key
+        sol_dict[initial_key]['t'] = t
+        sol_dict[initial_key]['dt'] = 0
+        path_X, path_Y = [], []
+        for key in solution[1:]:
+            distance = dist(sol_dict, key, prev_key)
+            time_taken = max(distance/speed, sol_dict[key]['ti'] - t)
+            t += time_taken
+            sol_dict[key]['dt'] = time_taken
+            sol_dict[key]['t'] = t
+            n_timesteps = int(round(time_taken))
+            path_x, path_y = getEquidistantPoints((sol_dict[prev_key]['x'], sol_dict[prev_key]['y']), (sol_dict[key]['x'], sol_dict[key]['y']), n_timesteps)
+            path_X.append(path_x)
+            path_Y.append(path_y)
+            prev_key = key 
+        
+        t_tot = t
+        path_X = np.concatenate(path_X)
+        path_Y = np.concatenate(path_Y)
 
-    path_X = np.concatenate(path_X)
-    path_Y = np.concatenate(path_Y)
+        sol_tots.append(deepcopy(t_tot))
+        sol_dicts.append(deepcopy(sol_dict))
+        sol_paths.append(deepcopy((path_X, path_Y)))
 
     def getColor(t, t_arrived, dt, ti, tf):
         if t <= ti:
@@ -146,37 +159,44 @@ def draw_animated_solution(X_dict, solution, initial_key=1, speed=1.0, save=Fals
             return RGBA
 
     # Then set up the figure, the axes, and the plot element
-    fig = plt.figure(1)
-    ax = fig.add_subplot()
-
-
-    path, = ax.plot([], [], linestyle='--', marker='', color='black', alpha=0.5)
-    pretty_circles = print_circles(ax, t_tot, X_dict, radius=1.2)
-    ax.set_title("Solution")
-    ax.set_xlabel("X")
-    ax.set_ylabel("Y")
-    ax.set_ylim([-5,55])
-    ax.set_xlim([-25,65])
-    ax.axis('equal')
+    fig, axs = plt.subplots(nrows=1, ncols=len(solutions), sharey=True)
+    paths = []
+    pretty_circles_list = []
+    titles = ["Solution", "Official Solution"]
+    for i, sol_dict in enumerate(sol_dicts):
+        t_tot = sol_tots[i]
+        if len(solutions) > 1: ax = axs[i]
+        else: ax = axs
+        paths.append(ax.plot([], [], linestyle='--', marker='', color='black', alpha=0.5)[0])
+        pretty_circles_list.append(print_circles(ax, t_tot, sol_dict, radius=1.2))
+        ax.set_title(titles[i])
+        ax.set_xlabel("X")
+        ax.set_ylabel("Y")
+        ax.set_ylim([-5,55])
+        ax.set_xlim([-25,65])
+        ax.axis('equal')
 
     # initialization function: plot the background of each frame
     def init():
-        path.set_data([], [])
-        return path,
+        for i, _ in enumerate(sol_dicts):
+            paths[i].set_data([], [])
+        return tuple(paths)
     
     # animation function: this is called sequentially
     def animate(t):
-        for k in range(len(X_dict)):
-            key = k+1
-            color = getColor(t, t_arrived=X_dict[key]['t'], dt=X_dict[key]['dt'], ti=X_dict[key]['ti'], tf=X_dict[key]['tf'])
-            time_window, back_circle, _, _ = pretty_circles[k]
-            back_circle.set_color(color)
-            time_window.set_color(color)
-            back_circle.set_alpha(color[-1]/2)
-            time_window.set_alpha(color[-1])
-        path.set_data(path_X[:t], path_Y[:t])
+        for i, sol_dict in enumerate(sol_dicts):
+            for k in range(len(sol_dict)):
+                key = k+1
+                color = getColor(t, t_arrived=sol_dict[key]['t'], dt=sol_dict[key]['dt'], ti=sol_dict[key]['ti'], tf=sol_dict[key]['tf'])
+                time_window, back_circle, _, _ = pretty_circles_list[i][k]
+                back_circle.set_color(color)
+                time_window.set_color(color)
+                back_circle.set_alpha(color[-1]/2)
+                time_window.set_alpha(color[-1])
+            path_X, path_Y = sol_paths[i]
+            paths[i].set_data(path_X[:t], path_Y[:t])
 
-        return tuple(np.concatenate(pretty_circles)) + (path,)
+        return tuple(np.concatenate([np.concatenate(pretty_circles_list[i]) for i in range(len(solutions))])) + tuple(paths)
 
     anim = animation.FuncAnimation(fig, animate, init_func=init, frames=path_X.size+50, interval=30, blit=True)
     plt.show()
@@ -195,8 +215,10 @@ def max_dist(inst_dict):
     return max_d
 
 if __name__ == "__main__":
-    inst, sol = extract_inst("n40w20.001.txt")
-    print(sol)
-    # sol = [1, 17, 20, 10, 19, 11, 18, 6, 16, 2, 12, 13, 7, 14, 8, 3, 5, 9, 21, 4, 15]
-    if sol is not None:
-        draw_animated_solution(inst, sol)
+    inst, official_sol = extract_inst("n20w20.001.txt")
+    print("Official:", official_sol)
+    sol = [1, 17, 20, 10, 19, 11, 18, 6, 16, 2, 12, 13, 7, 14, 8, 3, 5, 9, 21, 4, 15]
+    print("Local:",sol)
+    if official_sol is not None:
+        draw_animated_solution(inst, [sol, official_sol], save=False)
+    else: draw_animated_solution(inst, [sol])
