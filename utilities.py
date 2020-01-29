@@ -3,10 +3,10 @@ import matplotlib
 import numpy as np
 from matplotlib.patches import Wedge
 from matplotlib import animation, transforms
-from copy import deepcopy
+from copy import deepcopy, copy
 
 def isValid(X_dict, solution, initial_key=1):
-    every_point_taken = all([key==initial_key or key in solution for key in X_dict])
+    every_point_taken = np.all([(key==initial_key) or (key in solution) for key in X_dict])
     try:
         assert(every_point_taken)
     except AssertionError:
@@ -167,8 +167,9 @@ def plot_sol(X_dict, solution, potential=Potential()):
 
 
 def draw_animated_solution(instance_dict:dict, solutions:list, potential=Potential(), initial_key=1, speed=1.0, save=False):
-    if type(solutions[0]) == int:
-        solutions = [solutions]
+    # Check solution format
+    if type(solutions[0]) == int or  type(solutions[0]) == float:
+        solutions = copy([solutions])
 
     # Check that every solution is valid
     for solution in solutions:
@@ -282,7 +283,7 @@ if __name__ == "__main__":
     inst, official_sol = extract_inst("n20w20.001.txt")
     print("Official:", official_sol)
     sol = [1, 17, 15, 20, 11, 19, 6, 18, 16, 2, 12, 13, 7, 14, 8, 3, 5, 9, 21, 4, 10]
-    print("Local:",sol)
+    print("Local:", sol)
     if official_sol is not None:
         draw_animated_solution(inst, [sol, official_sol], save=False)
     else: draw_animated_solution(inst, [sol])
