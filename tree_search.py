@@ -1,5 +1,4 @@
-from utilities import plot_sol, get_dict, draw_animated_solution
-from energy import Potential
+from utilities import *
 from gym import Env, spaces
 import numpy as np
 from numpy.random import choice
@@ -75,6 +74,7 @@ class MctsEnv():
 
     def __init__(self, gym_env, model=None):
         self.env = deepcopy(gym_env)
+        self.env.early_end = True
         self.initial_observation = self.env.reset()
         self.tree = MCTS_DAG()
         self.model = model
@@ -184,9 +184,13 @@ class MctsEnv():
 
         policy = self.build_policy(temperature=temperature)
         actions = self.tree.get_node(self.initial_observation).actions
+        
         if len(actions) == 0:
-            actions = [action for action in range(1, len(self.env.X_dict)+1) if action not in self.initial_observation]
-            return choice(actions), policy
+            print(self.initial_observation, actions)
+            actions = [[action, self.env.X_dict[action]['tf']-self.env.time] for action in range(1, len(self.env.X_dict)+1) if action not in self.initial_observation]
+            actions = np.array(actions)
+            action = actions[actions[:,1].argsort()][0, 0]
+            return action, policy
         action = choice(actions, p=policy)
         # print("Choice", self.initial_observation, actions, action)
         return action, policy
@@ -204,6 +208,7 @@ class MctsEnv():
 class TSPTW_Env(Env):
 
     potential = Potential()
+    early_end = False
 
     def __init__(self, X_dict):
         self.X_dict = X_dict
@@ -217,8 +222,8 @@ class TSPTW_Env(Env):
         legal_actions = []
         for action in range(len(self.X_dict)+2):
             if (action not in observation) and (action in self.X_dict):
-                t = self.time + self.potential.get_time(self.X_dict, observation[-1], action)
-                if t >= self.X_dict[action]['ti']:
+                t = self.time + self.potential.get_time(self.X_dict, observation[-1], action, self.time)
+                if t >= self.X_dict[action]['ti'] and t <= self.X_dict[action]['tf']:
                     legal_actions.append(action)
         return legal_actions
 
@@ -232,7 +237,7 @@ class TSPTW_Env(Env):
         except AssertionError:
             raise AssertionError('\n Non-Legal action : {}\n'.format(real_action))
 
-        time_to_go = self.potential.get_time(self.X_dict, self.path[-1], real_action)
+        time_to_go = self.potential.get_time(self.X_dict, self.path[-1], real_action, self.time)
         self.path.append(real_action)
         observation = self.path
 
@@ -243,8 +248,10 @@ class TSPTW_Env(Env):
         if done:
             errors = self.potential.evaluate(self.X_dict, self.path)[2]
             if errors == 0:
-                print('Solution found! : {}'.format(self.path))
-                print('N_distances: {}'.format(self.potential.dist_count))
+                global solution_found
+                solution_found = deepcopy(self.path)
+                # print('Solution found! : {}'.format(solution_found))
+                # print('N_distances: {}'.format(self.potential.dist_count))
                 return
             else:
                 reward = -errors**2
@@ -253,8 +260,11 @@ class TSPTW_Env(Env):
             reward += -.1*self.potential.distance_to_window(self.time, self.X_dict[real_action]['ti'], self.X_dict[real_action]['tf'])
             reward += -10
     
-        # reward *= len(observation)
-        # print(observation, reward)
+        
+        # if len(self.legal_actions(observation)) == 0 and not done:
+        #     if self.early_end:
+        #         done = True
+        #     reward += -10
 
         # print(observation, reward, done)
         return observation, reward, done, {}
@@ -264,27 +274,48 @@ class TSPTW_Env(Env):
         self.time = 0
         return self.path
 
+def mc_backup(history, mcts_tree, G, alpha=0.1, decay=0.3):
+    for i, observation in enumerate(history):
+        print("MC on ", observation[-1], mcts_tree.get_node(observation).value, G*decay**i)
+        if mcts_tree.get_node(observation).value is not None:
+            mcts_tree.get_node(observation).value += alpha*(G*decay**i - mcts_tree.get_node(observation).value)
+        else:
+            mcts_tree.get_node(observation).value = G*decay**i
+
+
 if __name__ == "__main__":
     nodes = 20
     width = 20
-    instance = '005'
-    X_dict = get_dict("n{}w{}.{}.txt".format(nodes, width, instance))
+    instance = '004'
+    X_dict, official_sol = extract_inst("n{}w{}.{}.txt".format(nodes, width, instance))
     err = nodes
     env = TSPTW_Env(X_dict)
     mcts_env = MctsEnv(env)
-    while err > 0:
-        observation = env.reset()
-        done = False
-        while not done:
-            n_simulation = int(1000/np.log(1+len(observation)))
-            mcts_env.resetEnv(observation)
+    observation = env.reset()
+    done = False
+    hist = [deepcopy(observation)]
+    G = 0
+    while not done:
+        n_simulation = int(10000/np.log(1+len(observation)))
+        mcts_env.resetEnv(observation)
+        try: 
             action, _ = mcts_env.run_search(n_simulation=n_simulation, temperature=0)
             np.set_printoptions(precision=2, suppress=True)
             print(action, mcts_env.tree.get_node(observation).actions, mcts_env.tree.get_node(observation).UCB,
                     mcts_env.tree.get_node(observation).N/np.sum(mcts_env.tree.get_node(observation).N), mcts_env.tree.get_node(observation).Q)
+            
             observation, reward, done, _ = env.step(action)
-        print('Final solution : {}'.format(observation))    
-        print(TSPTW_Env.potential.dist_count)   
-        a, b, err = Potential().evaluate(X_dict, observation)
-        print(a, b, err)
-    draw_animated_solution(X_dict, observation)
+            if not done:
+                hist.append(deepcopy(observation))
+            G += reward
+        except TypeError:
+            done = True
+            observation = solution_found
+            break
+        # mc_backup(hist, mcts_env.tree, G)
+
+    print('Final solution : {}'.format(observation))    
+    print('Distance evaluations:', TSPTW_Env.potential.dist_count) 
+    a, b, err = Potential().evaluate(X_dict, observation)
+    print(a, b, err)
+    draw_animated_solution(X_dict, [observation, official_sol], save=False)
