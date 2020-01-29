@@ -1,12 +1,14 @@
-from utilities import extract_inst, plot_sol, draw_animated_solution
-from energy import Potential
+from utilities import *
 import numpy as np
 
-X_dict, official_solution = extract_inst("n20w20.005.txt")
+nodes = 20
+width = 20
+instance = '004'
+X_dict, official_solution = extract_inst("n{}w{}.{}.txt".format(nodes, width, instance))
 potential = Potential()
-string = '21 16 9 19 17 18 10 5 15 1 11 12 6 13 7 2 4 8 20 3 14'
-solution = [int(key) for key in string.split(' ')]
-solution = [1, 20, 12, 8, 19, 17, 14, 9, 4, 18, 3, 11, 5, 6, 16, 10, 15, 7, 21, 13, 2]
+# string = '21 16 9 19 17 18 10 5 15 1 11 12 6 13 7 2 4 8 20 3 14'
+# solution = [int(key) for key in string.split(' ')]
+solution = [1, 12, 4, 3, 20, 8, 16, 10, 9, 6, 7, 11, 15, 5, 13, 17, 19, 14, 21, 18, 2]
 initial_key = 1
 score = potential.evaluate(X_dict, solution, initial_key=initial_key)
 print(solution)

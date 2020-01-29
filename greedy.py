@@ -1,5 +1,4 @@
-from utilities import get_dict, plot_sol, draw_animated_solution, extract_inst
-from energy import Potential
+from utilities import *
 import numpy as np
 import operator
 from copy import copy
