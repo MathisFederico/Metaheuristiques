@@ -3,7 +3,7 @@ from random import randint, random
 import numpy as np
 import matplotlib.pyplot as plt
 from copy import copy
-from greedy import fifo_greedy
+from greedy import greedy
 
 def recuit(inst_dict, pot, T=100 ,T_min=10, lamb=0.99, initial_key=1, **kwargs):
     
@@ -32,9 +32,9 @@ def recuit(inst_dict, pot, T=100 ,T_min=10, lamb=0.99, initial_key=1, **kwargs):
     # We take a greedy initial solution
     solution = list(range(1, len(inst_dict)+1)) #solution initiale 1, 2, ... , n
     if greedy_start:
-        solution = fifo_greedy(inst_dict)
-    penality = (len(solution)+1)*max_dist(inst_dict, pot)/100
-    # penality = 1
+        solution = greedy(inst_dict)
+    # penality = (len(solution)+1)*max_dist(inst_dict, pot)/100
+    penality = 0
 
     def cost(E, penality=penality):
         return E[0]/10 + E[1] + E[2]*penality
@@ -98,9 +98,9 @@ def recuit(inst_dict, pot, T=100 ,T_min=10, lamb=0.99, initial_key=1, **kwargs):
     return best_solution, best_evaluation, solutions_energy, best_energies
 
 if __name__ == "__main__":
-    n_sim = 5
+    n_sim = 100
 
-    Tmax, Tmin, lamb = 100, 0.1, 1 - 1e-4
+    Tmax, Tmin, lamb = 100, 0.1, 1 - 1e-2
 
     nodes = 20
     width = 20
@@ -108,9 +108,12 @@ if __name__ == "__main__":
     data, official_solution = extract_inst("n{}w{}.{}.txt".format(nodes, width, instance))
 
     solutions_energy_list, best_energies_list = [], []
+    optimal_count = 0
     for sim in range(n_sim):
+        # instance = '00' + str(sim%5 + 1)
+        # data, _ = extract_inst("n{}w{}.{}.txt".format(nodes, width, instance))
         pot = Potential()
-        solution, energy, solutions_energy, best_energies = recuit(data, pot, T=Tmax, T_min=Tmin, lamb=lamb, plotting=False, print_log=False, greedy_start=False)
+        solution, energy, solutions_energy, best_energies = recuit(data, pot, T=Tmax, T_min=Tmin, lamb=lamb, plotting=False, print_log=False, greedy_start=True)
         solutions_energy_list.append(deepcopy(solutions_energy))
         best_energies_list.append(deepcopy(best_energies))
         # if official_solution is not None:
@@ -118,24 +121,24 @@ if __name__ == "__main__":
         # else:
         #     draw_animated_solution(data, solution)
         print("Distances evaluations :", pot.dist_count)
+        optimal_count += int(Potential().evaluate(data, solution)[2] != 0)
     
-    solutions_energy_m = np.median(np.array(solutions_energy_list), axis=0)
+    solutions_energy_m = np.mean(np.array(solutions_energy_list), axis=0)
+    best_energy_m = np.mean(np.array(best_energies_list), axis=0)
     dist_evaluations = np.linspace(0, pot.dist_count, solutions_energy_m.shape[0])
     best_energy = np.min(solutions_energy_list)*np.ones((solutions_energy_m.shape[0],))
 
-    plt.plot(dist_evaluations, solutions_energy_m, label='Median solutions energy', color='b')
+    plt.plot(dist_evaluations, solutions_energy_m, label='Mean solutions energy', color='b')
+    plt.plot(dist_evaluations, best_energy_m, label='Mean best solution energy', color='orange')
     plt.plot(dist_evaluations, best_energy, label='Best energy', color='r')
 
-    optimal_count = 0
     for solutions_energy in solutions_energy_list:
         plt.plot(dist_evaluations, solutions_energy, alpha=0.2/n_sim, color='b')
-        if np.min(solutions_energy) == np.min(solutions_energy_list):
-            optimal_count += 1
 
-    print('Got optimal {}% of time'.format(optimal_count/n_sim*100))
+    print('Got No error {}% of time'.format(optimal_count/n_sim*100))
     plt.xlabel('Distance evaluations', fontsize=20)
     plt.ylabel('E', fontsize=20)
     instance_name = "n{}w{}.{}.txt".format(nodes, width, instance)
-    plt.title('Simulated recuit on instance {} with T in [{}, {}] and \lambda = {}'.format(instance_name, Tmin, Tmax, lamb), fontsize=36)
+    plt.title('Simulated recuit on instance {} with T in [{}, {}] and lambda = {}'.format(instance_name, Tmin, Tmax, lamb), fontsize=20)
     plt.legend()
     plt.show()

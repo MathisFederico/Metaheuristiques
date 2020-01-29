@@ -26,10 +26,10 @@ from copy import copy
 #         solution.append(choice)
 #     return solution, pot.dist_count/n
 
-def fifo_greedy(X_dict, alpha=1/3, beta=0):
-    fifo = np.array([[key, X_dict[key]['ti'] + alpha*X_dict[key]['tf'] + beta*(X_dict[key]['tf']-X_dict[key]['ti'])] for key in X_dict if key != 1])
-    fifo = fifo[fifo[:,1].argsort()]
-    solution = np.concatenate([[1], fifo[:, 0]])
+def greedy(data, alpha=0, beta=1):
+    greed = np.array([[key, alpha*data[key]['ti'] + beta*data[key]['tf']] for key in data if key != 1])
+    greed = greed[greed[:,1].argsort()]
+    solution = np.concatenate([[1], greed[:, 0]])
     return solution
 
 # def fifo_dist_greedy(X_dict, lenght=3, potential=Potential()):
@@ -54,14 +54,14 @@ def fifo_greedy(X_dict, alpha=1/3, beta=0):
 
 if __name__ == "__main__":
     pot = Potential()
-    nodes = 20
+    nodes = 200
     width = 20
     instance = '001'
-    X_dict, official_solution = extract_inst("n{}w{}.{}.txt".format(nodes, width, instance))
+    for i in range(5):
+        instance = '00' + str(i%5 +1)
+        data, official_solution = extract_inst("n{}w{}.{}.txt".format(nodes, width, instance))
+        solution = greedy(data, alpha=0, beta=1)
+        print(pot.evaluate(data, solution))
 
     # solution, evaluations = time_greedy(pot, X_dict)
-
-    solution = fifo_greedy(X_dict)
-    print(solution)
-    print(pot.evaluate(X_dict, solution))
-    draw_animated_solution(X_dict, [solution, official_solution], save=True)
+    # draw_animated_solution(data, [solution, official_solution], save=True)
