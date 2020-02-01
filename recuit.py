@@ -47,7 +47,7 @@ def recuit(inst_dict, pot, T=100 ,T_min=10, lamb=0.99, initial_key=1, **kwargs):
 
     solutions_energy = []
     best_energies = []
-    print(f'Initial error and energy: {evaluation[2]} {energy:.1f}')
+    if print_log: print(f'Initial error and energy: {evaluation[2]} {energy:.1f}')
 
     k = 0
     while T > T_min:
@@ -98,47 +98,77 @@ def recuit(inst_dict, pot, T=100 ,T_min=10, lamb=0.99, initial_key=1, **kwargs):
     return best_solution, best_evaluation, solutions_energy, best_energies
 
 if __name__ == "__main__":
-    n_sim = 100
 
-    Tmax, Tmin, lamb = 100, 0.1, 1 - 1e-2
+    configs = {
+        'n_sim':[1000, 50, 10, 5],
+        'Tmax':[1, 1, 10, 200],
+        'Tmin':[0.1], 
+        'lamb':[1 - 1e-3, 1 - 1e-4, 1 - 5e-5, 1 - 1e-5],
+        'greedy_start':[True],
+        'plot_energies':[False],
+        'nodes':[20, 40, 60, 200],
+        'width':[20],
+        'instance':['001'],
+    }
 
-    nodes = 20
-    width = 20
-    instance = '001'
-    data, official_solution = extract_inst("n{}w{}.{}.txt".format(nodes, width, instance))
+    nb_configs = np.max([len(configs[param]) for param in configs])
+    for i in range(nb_configs):
+        n_sim = configs['n_sim'][i%len(configs['n_sim'])]
+        Tmax = configs['Tmax'][i%len(configs['Tmax'])]
+        Tmin = configs['Tmin'][i%len(configs['Tmin'])]
+        lamb = configs['lamb'][i%len(configs['lamb'])]
+        greedy_start = configs['greedy_start'][i%len(configs['greedy_start'])]
+        plot_energies = configs['plot_energies'][i%len(configs['plot_energies'])]
+        nodes = configs['nodes'][i%len(configs['nodes'])]
+        width = configs['width'][i%len(configs['width'])]
+        instance = configs['instance'][i%len(configs['instance'])]
 
-    solutions_energy_list, best_energies_list = [], []
-    optimal_count = 0
-    for sim in range(n_sim):
-        # instance = '00' + str(sim%5 + 1)
-        # data, _ = extract_inst("n{}w{}.{}.txt".format(nodes, width, instance))
-        pot = Potential()
-        solution, energy, solutions_energy, best_energies = recuit(data, pot, T=Tmax, T_min=Tmin, lamb=lamb, plotting=False, print_log=False, greedy_start=True)
-        solutions_energy_list.append(deepcopy(solutions_energy))
-        best_energies_list.append(deepcopy(best_energies))
-        # if official_solution is not None:
-        #     draw_animated_solution(data, [solution, official_solution])
-        # else:
-        #     draw_animated_solution(data, solution)
-        print("Distances evaluations :", pot.dist_count)
-        optimal_count += int(Potential().evaluate(data, solution)[2] != 0)
-    
-    solutions_energy_m = np.mean(np.array(solutions_energy_list), axis=0)
-    best_energy_m = np.mean(np.array(best_energies_list), axis=0)
-    dist_evaluations = np.linspace(0, pot.dist_count, solutions_energy_m.shape[0])
-    best_energy = np.min(solutions_energy_list)*np.ones((solutions_energy_m.shape[0],))
+        instance_name = "n{}w{}.{}.txt".format(nodes, width, instance)
+        data, official_solution = extract_inst(instance_name)
 
-    plt.plot(dist_evaluations, solutions_energy_m, label='Mean solutions energy', color='b')
-    plt.plot(dist_evaluations, best_energy_m, label='Mean best solution energy', color='orange')
-    plt.plot(dist_evaluations, best_energy, label='Best energy', color='r')
+        solutions_energy_list, best_energies_list = [], []
+        for sim in range(n_sim):
+            pot = Potential()
+            solution, energy, solutions_energy, best_energies = recuit(data, pot, T=Tmax, T_min=Tmin, lamb=lamb, plotting=False, print_results=True, print_log=False, greedy_start=greedy_start)
+            solutions_energy_list.append(deepcopy(solutions_energy))
+            best_energies_list.append(deepcopy(best_energies))     
+        
+        solutions_energy_m = np.mean(np.array(solutions_energy_list), axis=0)
+        best_energy_50 = np.quantile(np.array(best_energies_list), q=0.5, axis=0)
+        best_energy_90 = np.quantile(np.array(best_energies_list), q=0.9, axis=0)
+        best_energy = np.min(solutions_energy_list)
+        
+        dist_evaluations = np.linspace(0, pot.dist_count, solutions_energy_m.shape[0])
 
-    for solutions_energy in solutions_energy_list:
-        plt.plot(dist_evaluations, solutions_energy, alpha=0.2/n_sim, color='b')
+        if greedy_start: greedy_txt = 'greedy'
+        else: greedy_txt = ''
+        print(f'{instance_name}_{n_sim}_{greedy_txt}_{Tmax}_{Tmin}')
 
-    print('Got No error {}% of time'.format(optimal_count/n_sim*100))
-    plt.xlabel('Distance evaluations', fontsize=20)
-    plt.ylabel('E', fontsize=20)
-    instance_name = "n{}w{}.{}.txt".format(nodes, width, instance)
-    plt.title('Simulated recuit on instance {} with T in [{}, {}] and lambda = {}'.format(instance_name, Tmin, Tmax, lamb), fontsize=20)
-    plt.legend()
-    plt.show()
+        idx_50 = np.argwhere(best_energy_50==best_energy)
+        if len(idx_50) > 0: dist_50 = int(dist_evaluations[idx_50[0]])
+        else: dist_50 = 'No'
+
+        idx_90 = np.argwhere(best_energy_90==best_energy)
+        if len(idx_90) > 0: dist_90 = int(dist_evaluations[idx_90[0]])
+        else: dist_90 = 'No'
+        
+        print("Distances evaluations for 50% optimal:", dist_50)
+        print("Distances evaluations for 90% optimal:", dist_90)
+
+        
+        plt.plot(dist_evaluations, solutions_energy_m - best_energy, label='Mean solutions energy', color='b')
+        plt.plot(dist_evaluations, best_energy_90 - best_energy, label='Best fot 90% of solutions', color='orange', linestyle='--')
+        plt.plot(dist_evaluations, best_energy_50 - best_energy, label='Best fot 50% of solutions', color='g', linestyle='--')
+
+        for solutions_energy in solutions_energy_list:
+            plt.plot(dist_evaluations, solutions_energy - best_energy, alpha=0.8/((n_sim)**(3/4)), color='b')
+
+        plt.xlabel('Distance evaluations', fontsize=11)
+        plt.ylabel('E - $E_{min}$', fontsize=20)
+        if greedy_start: plt.suptitle('Greedy simulated annealing on instance {} '.format(instance_name), fontsize=14)
+        else: plt.suptitle('Simulated annealing on instance {} '.format(instance_name), fontsize=14)
+        plt.title('with $T \in [{}, {}]$ and $\lambda$ = {}'.format(Tmin, Tmax, lamb), fontsize=10)
+        plt.legend(loc='upper right')
+        plt.savefig(f'{instance_name[:-4]}_{n_sim}_{greedy_txt}_{dist_50}_{dist_90}.png')
+        if plot_energies: plt.show()
+        plt.close()
