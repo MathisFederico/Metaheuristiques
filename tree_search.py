@@ -1,8 +1,12 @@
 from utilities import *
+from greedy import greedy
 from gym import Env, spaces
 import numpy as np
 from numpy.random import choice
 from copy import deepcopy
+
+def softmax(x):
+    return np.exp(-x)/np.sum(np.exp(-x))
 
 class MCTS_DAG():
 
@@ -72,11 +76,12 @@ class MCTS_DAG():
 
 class MctsEnv():
 
-    def __init__(self, gym_env, model=None):
+    def __init__(self, gym_env, model=None, cost=None):
         self.env = deepcopy(gym_env)
         self.env.early_end = True
         self.initial_observation = self.env.reset()
         self.tree = MCTS_DAG()
+        self.cost = cost
         self.model = model
         self.c = 3
         self.reward, self.done = 0, False
@@ -135,11 +140,14 @@ class MctsEnv():
             # print("{} is already in nodes !".format(observation))
             return
         P, value = None, None
-        if self.model is not None:
-            x = np.array([observation])
-            P, value = self.model.predict(x)
-            P, value = P[0], value[0, 0]
-        self.tree.add_node(observation, self.env.legal_actions(observation), P, value)
+        if self.cost is not None:
+            legal_actions = self.env.legal_actions(observation)
+            P = np.ones(len(legal_actions))
+            for i, action in enumerate(legal_actions):
+                P[i] = self.cost(observation[-1], int(action))
+                P = softmax(P)
+        
+        self.tree.add_node(observation, legal_actions, P, value)
 
     def _backup(self, history, last_observation):
         # Get last_observation value
@@ -222,9 +230,7 @@ class TSPTW_Env(Env):
         legal_actions = []
         for action in range(len(self.X_dict)+2):
             if (action not in observation) and (action in self.X_dict):
-                t = self.time + self.potential.get_time(self.X_dict, observation[-1], action, self.time)
-                if t >= self.X_dict[action]['ti'] and t <= self.X_dict[action]['tf']:
-                    legal_actions.append(action)
+                legal_actions.append(action)
         return legal_actions
 
     def isLegal(self, action:int):
@@ -254,11 +260,10 @@ class TSPTW_Env(Env):
                 # print('N_distances: {}'.format(self.potential.dist_count))
                 return
             else:
-                reward = -errors**2
+                reward = -errors
 
         if not self.potential.in_window(self.time, self.X_dict[real_action]['ti'], self.X_dict[real_action]['tf']):
-            reward += -.1*self.potential.distance_to_window(self.time, self.X_dict[real_action]['ti'], self.X_dict[real_action]['tf'])
-            reward += -10
+            reward += -self.potential.distance_to_window(self.time, self.X_dict[real_action]['ti'], self.X_dict[real_action]['tf'])
     
         
         # if len(self.legal_actions(observation)) == 0 and not done:
@@ -274,35 +279,43 @@ class TSPTW_Env(Env):
         self.time = 0
         return self.path
 
-def mc_backup(history, mcts_tree, G, alpha=0.1, decay=0.3):
-    for i, observation in enumerate(history):
-        print("MC on ", observation[-1], mcts_tree.get_node(observation).value, G*decay**i)
-        if mcts_tree.get_node(observation).value is not None:
-            mcts_tree.get_node(observation).value += alpha*(G*decay**i - mcts_tree.get_node(observation).value)
-        else:
-            mcts_tree.get_node(observation).value = G*decay**i
+# def mc_backup(history, mcts_tree, G, alpha=0.1, decay=0.3):
+#     for i, observation in enumerate(history):
+#         print("MC on ", observation[-1], mcts_tree.get_node(observation).value, G*decay**i)
+#         if mcts_tree.get_node(observation).value is not None:
+#             mcts_tree.get_node(observation).value += alpha*(G*decay**i - mcts_tree.get_node(observation).value)
+#         else:
+#             mcts_tree.get_node(observation).value = G*decay**i
 
 
 if __name__ == "__main__":
+    np.set_printoptions(suppress=True, precision=2)
     nodes = 20
     width = 20
-    instance = '004'
-    X_dict, official_sol = extract_inst("n{}w{}.{}.txt".format(nodes, width, instance))
-    err = nodes
-    env = TSPTW_Env(X_dict)
-    mcts_env = MctsEnv(env)
+    instance = '001'
+    data, official_sol = extract_inst("n{}w{}.{}.txt".format(nodes, width, instance))
+
+    def cost(prev_key, key, data=data):
+        min_ti, max_ti = np.min([data[key]['ti'] for key in data]), np.max([data[key]['ti'] for key in data])
+        min_tf, max_tf = np.min([data[key]['tf'] for key in data]), np.max([data[key]['tf'] for key in data])
+        alpha = 1/(max_ti - min_ti)
+        beta = 1/(max_tf - min_tf)
+        return (alpha*(data[key]['ti'] - min_ti) + beta*(data[key]['tf'] - min_tf))/2
+
+    env = TSPTW_Env(data)
+    mcts_env = MctsEnv(env, cost=cost)
     observation = env.reset()
     done = False
     hist = [deepcopy(observation)]
     G = 0
+    n_simulation = 10000
     while not done:
-        n_simulation = int(10000/np.log(1+len(observation)))
+        # n_simulation = int(10000/np.log(1+len(observation)))
         mcts_env.resetEnv(observation)
         try: 
             action, _ = mcts_env.run_search(n_simulation=n_simulation, temperature=0)
             np.set_printoptions(precision=2, suppress=True)
-            print(action, mcts_env.tree.get_node(observation).actions, mcts_env.tree.get_node(observation).UCB,
-                    mcts_env.tree.get_node(observation).N/np.sum(mcts_env.tree.get_node(observation).N), mcts_env.tree.get_node(observation).Q)
+            print(action, mcts_env.tree.get_node(observation).actions, mcts_env.tree.get_node(observation).UCB, mcts_env.tree.get_node(observation).P)
             
             observation, reward, done, _ = env.step(action)
             if not done:
@@ -313,9 +326,10 @@ if __name__ == "__main__":
             observation = solution_found
             break
         # mc_backup(hist, mcts_env.tree, G)
+        n_simulation = 1
 
     print('Final solution : {}'.format(observation))    
     print('Distance evaluations:', TSPTW_Env.potential.dist_count) 
-    a, b, err = Potential().evaluate(X_dict, observation)
+    a, b, err = Potential().evaluate(data, observation)
     print(a, b, err)
-    draw_animated_solution(X_dict, [observation, official_sol], save=False)
+    draw_animated_solution(data, [observation, official_sol], save=False)
