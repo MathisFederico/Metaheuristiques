@@ -27,7 +27,15 @@ from copy import copy
 #     return solution, pot.dist_count/n
 
 def greedy(data, alpha=0, beta=1):
-    greed = np.array([[key, alpha*data[key]['ti'] + beta*data[key]['tf']] for key in data if key != 1])
+
+    def cost(key, data=data):
+        min_ti, max_ti = np.min([data[key]['ti'] for key in data]), np.max([data[key]['ti'] for key in data])
+        min_tf, max_tf = np.min([data[key]['tf'] for key in data]), np.max([data[key]['tf'] for key in data])
+        alpha = 1/(max_ti - min_ti)
+        beta = 1/(max_tf - min_tf)
+        return (alpha*(data[key]['ti'] - min_ti) + beta*(data[key]['tf'] - min_tf))/2
+    
+    greed = np.array([[key, cost(key)] for key in data if key != 1])
     greed = greed[greed[:,1].argsort()]
     solution = np.concatenate([[1], greed[:, 0]])
     return solution
@@ -54,7 +62,7 @@ def greedy(data, alpha=0, beta=1):
 
 if __name__ == "__main__":
     pot = Potential()
-    nodes = 200
+    nodes = 20
     width = 20
     instance = '001'
     for i in range(5):
